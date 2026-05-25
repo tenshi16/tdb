@@ -78,7 +78,29 @@ impl DB {
                         let all_data = query_table.data.read().unwrap();
                         all_data.as_ref().cloned()
                     }
-                    _ => None,
+                    _ => {
+                        let column_coll: Vec<&str> = column_specifier.split(',').collect();
+                        let column_indexes: Vec<u8> = column_coll
+                            .into_iter()
+                            .map(|col_name| query_table.columns.get(col_name).copied().unwrap())
+                            .collect();
+
+                        let mut result: Vec<String> = Vec::new();
+                        let all_data = query_table.data.read().unwrap();
+
+                        if let Some(rows) = all_data.as_ref() {
+                            for row in rows {
+                                let row_as_vec: Vec<&str> = row.split(',').collect();
+                                let selected = column_indexes
+                                    .iter()
+                                    .map(|&index| row_as_vec[index as usize])
+                                    .collect::<Vec<&str>>()
+                                    .join(",");
+                                result.push(selected);
+                            }
+                        }
+                        Some(result)
+                    }
                 }
             }
             _ => None,
@@ -135,7 +157,7 @@ fn main() {
         tables: Arc::new(RwLock::new(table_hashmap)),
     };
 
-    if let Some(result) = db.query("GET * personas") {
+    if let Some(result) = db.query("GET name,sex,last_name personas") {
         println!("result is = {:?}", result);
     }
 }
