@@ -54,21 +54,24 @@ impl DB {
     }
 
     /*
-      Let's start with a simple command, this is the contract GET * FROM X
+      Adding sort operation, this is the contract GET * X SORT_BY Y
     */
 
     fn query(&self, command: &str) -> Option<Vec<String>> {
         let mut command_sections: VecDeque<&str> = command.split(' ').collect();
-        let operation: Operation;
-        let table_name: &str;
-        let column_specifier: &str;
+        let operation = Operation::from(command_sections.pop_front().unwrap());
+        let sort_column = command_sections.pop_back().unwrap();
+        let predicate = command_sections.pop_back().unwrap(); 
+        let table_name = command_sections.pop_back().unwrap();
+        let column_specifier = command_sections.pop_front().unwrap();
+        println!("Operation: {:?}", operation);
+        println!("Table: {}", table_name);
+        println!("Spec: {}", column_specifier);
+        // This works, but always assumes a fixed command, needs to work even if sort or other
+        // commands are not present, also needs to consider other operations, or maybe move the
+        // rest of the commands after getting the operation?
 
-        operation = Operation::from(command_sections.pop_front().unwrap());
-        table_name = command_sections.pop_back().unwrap();
-        column_specifier = command_sections.pop_front().unwrap();
-        println!("op{:?}", operation);
-        println!("table{}", table_name);
-        println!("spec{}", column_specifier);
+        println!("predicate {}, sort_column {}", predicate, sort_column);
 
         match operation {
             Operation::GET => {
@@ -98,6 +101,16 @@ impl DB {
                                     .join(",");
                                 result.push(selected);
                             }
+                        }
+                        if predicate == "SORT_BY" {
+                            let cloned_query_table = Arc::clone(&query_table);
+                            result.sort_by(|a,b| {
+                                let split_a: Vec<&str> = a.split(',').collect();
+                                let split_b: Vec<&str> = b.split(',').collect();
+                                let sort_index = cloned_query_table.columns.get(sort_column).copied().unwrap();
+                                println!("sorting value {}", split_a[sort_index as usize]);
+                                split_a[sort_index as usize].cmp(split_b[sort_index as usize])
+                            })
                         }
                         Some(result)
                     }
@@ -149,6 +162,7 @@ fn main() {
 
     table_append(&mut table1, "Angel,Gomez,30,M".to_string());
     table_append(&mut table1, "M,G,29,F".to_string());
+    table_append(&mut table1, "A,Z,70,M".to_string());
     let mut table_hashmap = HashMap::new();
     table_hashmap.insert("personas".to_string(), Arc::new(table1));
     let db = DB {
@@ -157,7 +171,7 @@ fn main() {
         tables: Arc::new(RwLock::new(table_hashmap)),
     };
 
-    if let Some(result) = db.query("GET name,sex,last_name personas") {
+    if let Some(result) = db.query("GET name,sex,last_name personas SORT_BY age") {
         println!("result is = {:?}", result);
     }
 }
